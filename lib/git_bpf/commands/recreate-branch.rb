@@ -217,7 +217,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       if name.include? source or name.include? alt_base or name.match remote_heads
         if verbose
           puts "INFO: <#{commit_name}> skipped because '#{name}' matches #{source} / #{alt_base} / #{remote_heads}"
-          puts '      Possible problem: Mainline branch has been merged into task branch.'
+          puts '      Possible problem: Task branch has been forced.'
           puts '      Solution: Do merge manually.'
         end
       elsif name.eql? 'undefined'
