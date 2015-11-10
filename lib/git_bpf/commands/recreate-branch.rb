@@ -60,12 +60,13 @@ class RecreateBranch < GitFlow/'recreate-branch'
       terminate "Cannot find reference '#{opts.base}' to use as a base for new branch: #{opts.branch}."
     end
 
+    unless opts.remote
+      repo = Repository.new(Dir.getwd)
+      remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
+      opts.remote = remote_name.empty? ? 'origin' : remote_name
+    end
+
     if opts.recreateBranch
-      unless opts.remote
-        repo = Repository.new(Dir.getwd)
-        remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
-        opts.remote = remote_name.empty? ? 'origin' : remote_name
-      end
       git('fetch', opts.remote)
       name = opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
       ohai "Checkouting #{opts.remote + '/' + opts.base} as #{name}"
@@ -75,11 +76,6 @@ class RecreateBranch < GitFlow/'recreate-branch'
     end
 
     if opts.discard
-      unless opts.remote
-        repo = Repository.new(Dir.getwd)
-        remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
-        opts.remote = remote_name.empty? ? 'origin' : remote_name
-      end
       git('fetch', opts.remote)
       if branchExists?(source, opts.remote)
         opoo "This will delete your local '#{source}' branch if it exists and create it afresh from the #{opts.remote} remote."
