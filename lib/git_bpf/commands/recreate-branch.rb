@@ -39,7 +39,9 @@ class RecreateBranch < GitFlow/'recreate-branch'
       ['-v', '--verbose',
         "Show more info about skipping branches etc.",
         lambda { |n| opts.verbose = true }],
-
+      ['-c', '--recreate-base',
+       "Recreate base branch (automaticly fetch remote, checkout remote/base to some random name and recreate branch on it)",
+       lambda { |n| opts.recreateBranch = true}]
     ]
   end
 
@@ -56,6 +58,20 @@ class RecreateBranch < GitFlow/'recreate-branch'
 
     if not refExists? opts.base
       terminate "Cannot find reference '#{opts.base}' to use as a base for new branch: #{opts.branch}."
+    end
+
+    if opts.recreateBranch
+      unless opts.remote
+        repo = Repository.new(Dir.getwd)
+        remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
+        opts.remote = remote_name.empty? ? 'origin' : remote_name
+      end
+      git('fetch', opts.remote)
+      name = opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
+      ohai "Checkouting #{opts.remote + '/' + opts.base} as #{name}"
+      git('checkout', '-B', name, opts.remote + '/' + opts.base)
+      git('checkout', source)
+      opts.base = name
     end
 
     if opts.discard
@@ -93,10 +109,18 @@ class RecreateBranch < GitFlow/'recreate-branch'
     branches = getMergedBranches(opts.base, source, opts.verbose)
 
     if branches.empty?
+      if opts.recreateBranch and opts.base
+        ohai "Cleaning up temporary branches ('#{opts.base}')."
+        git('branch', '-D', opts.base)
+      end
       terminate "No feature branches detected, '#{source}' matches '#{opts.base}'."
     end
 
     if opts.list
+      if opts.recreateBranch and opts.base
+        ohai "Cleaning up temporary branches ('#{opts.base}')."
+        git('branch', '-D', opts.base)
+      end
       terminate "Branches to be merged:\n#{branches.shell_list}"
     end
 
@@ -112,9 +136,15 @@ class RecreateBranch < GitFlow/'recreate-branch'
     puts
     puts "If you see something unexpected check:"
     puts "a) that your '#{source}' branch is up to date"
-    puts "b) if '#{opts.base}' is a branch, make sure it is also up to date."
+    unless opts.recreateBranch
+      puts "b) if '#{opts.base}' is a branch, make sure it is also up to date."
+    end
     opoo "If there are any non-merge commits in '#{source}', they will not be included in '#{opts.branch}'. You have been warned."
     if not promptYN "Proceed with #{source} branch recreation?"
+      if opts.recreateBranch and opts.base
+        ohai "Cleaning up temporary branches ('#{opts.base}')."
+        git('branch', '-D', opts.base)
+      end
       terminate "Aborting."
     end
 
@@ -161,6 +191,9 @@ class RecreateBranch < GitFlow/'recreate-branch'
           puts "Then run the following command to return your repository to its original state."
           puts "\n"
           puts "git checkout #{tmp_source} && git branch -D #{opts.branch} && git branch -m #{opts.branch}"
+          if opts.recreateBranch and opts.base
+            puts "git branch -D #{opts.base}"
+          end
           puts "\n"
           puts "If you do not want to resolve the conflict, it is safe to just run the above command to restore your repository to the state it was in before executing this command."
           terminate
@@ -181,6 +214,11 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('branch', '-m', tmp_source, source)
     else
       git('branch', '-D', tmp_source)
+    end
+
+    if opts.recreateBranch and opts.base
+      ohai "6. Cleaning up temporary branches ('#{opts.base}')."
+      git('branch', '-D', opts.base)
     end
   end
 

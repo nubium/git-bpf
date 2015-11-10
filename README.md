@@ -24,6 +24,7 @@ Recreates <source-branch> in-place or as a new branch by re-merging all of the m
         -b, --branch NAME                Instead of deleting the source branch and replacng it with a new branch of the same name, leave the source branch and create a new branch called NAME.
         -x, --exclude NAME               Specify a list of branches to be excluded.
         -l, --list                       Process source branch for merge commits and list them. Will not make any changes to any branches.
+        -c, --recreate-base              Recreate base branch (automaticly fetch remote, checkout remote/base to some random name and recreate branch on it)
 
 
 ### git-share-rerere
