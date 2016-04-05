@@ -32,9 +32,15 @@ class Repository
     self.cmd("fetch", "--quiet", remote)
   end
 
-  def remoteUrl(name)
+  def remoteUrl(name, value = "")
     begin
-      config(false, "--get", "remote.#{name}.url").chomp
+      if value == ""
+        config(false, "--get", "remote.#{name}.url").chomp
+      else
+        cmd("remote", "remove", name)
+        cmd("remote", "add", name, value)
+        cmd("fetch", name)
+      end
     rescue
       terminate "No remote named '#{name}' in repository: #{self.path}."
     end

@@ -5,7 +5,7 @@ require 'find'
 require 'win32/file' if RUBY_PLATFORM =~ /win32/ or RUBY_PLATFORM =~ /mingw32/
 
 #
-# init: 
+# init:
 #
 class Init < GitFlow/'init'
 
@@ -18,6 +18,7 @@ class Init < GitFlow/'init'
     opts.remote_name = 'origin'
     opts.rerere_branch = 'rr-cache'
     opts.remote_recreate = '"*"'
+    opts.remote_url = nil
 
     [
       ['-d', '--directory-name NAME',
@@ -26,6 +27,9 @@ class Init < GitFlow/'init'
       ['-r', '--remote-name NAME',
         "Name of remote repo for rr-cache. Defaults to origin",
         lambda { |n| opts.remote_name = n }],
+      ['-u', '--remote-repo URL',
+        "URL to remote repo. This add rr-cache remote at URL",
+        lambda { |n| opts.remote_url = n }],
       ['-b', '--rerere-branch NAME',
         "",
         lambda { |n| opts.rerere_branch = n }],
@@ -123,7 +127,7 @@ class Init < GitFlow/'init'
       command = "!_git-bpf #{name}"
       target.cmd("config", "--local", "alias.#{name}", command)
     end
-	
+
 	command = "'!sh -c \".git/git-bpf/commands/merge-to-integration.sh $1\"'"
 	target.cmd("config", "--local", "alias.merge-to-integration", command)
 
@@ -137,10 +141,12 @@ class Init < GitFlow/'init'
     target.config(true, "rerere.autoupdate", "true")
 
     target.config(true, "gitbpf.remotename", opts.remote_name)
+    target.config(true, "gitbpf.rerebranch", opts.rerere_branch)
     target.config(true, "gitbpf.remoterecreate", opts.remote_recreate)
 
     rerere_path = File.join(target.git_dir, 'rr-cache')
-    target_remote_url = target.remoteUrl(opts.remote_name)
+    target_remote_url = !opts.remote_url.nil? ? opts.remote_url : target.remoteUrl(opts.remote_name)
+    target.config(true, "gitbpf.remoteurl", target_remote_url)
 
     if not File.directory? rerere_path
       rerere = Repository::clone target_remote_url, rerere_path, opts.remote_name
@@ -155,17 +161,22 @@ class Init < GitFlow/'init'
 
     rerere.fetch opts.remote_name
 
-    if rerere.branch?('rr-cache', opts.remote_name)
+    if rerere.remoteUrl(opts.remote_name) != target_remote_url
+      opoo "Rerere url not match. Trying to switch-it"
+      rerere.remoteUrl(opts.remote_name, target_remote_url)
+    end
+
+    if rerere.branch?(opts.rerere_branch, opts.remote_name)
       # Remote has branch 'rr-cache', make sure we are currently on it.
       if not rerere.head.include? "rr-cache"
-        rerere.cmd("checkout", "rr-cache")
+        rerere.cmd("checkout", opts.rerere_branch)
       end
     else
       # Create orphan branch 'rr-cache' and push to remote.
-      rerere.cmd("checkout", "--orphan", "rr-cache")
+      rerere.cmd("checkout", "--orphan", opts.rerere_branch)
       rerere.cmd("rm", "-rf", "--ignore-unmatch", "#{rerere_path}/")
       rerere.cmd("commit", "-a", "--allow-empty", "-m", "Automatically creating branch to track conflict resolutions.")
-      rerere.cmd("push", opts.remote_name, "rr-cache")
+      rerere.cmd("push", opts.remote_name, opts.rerere_branch)
     end
 
 

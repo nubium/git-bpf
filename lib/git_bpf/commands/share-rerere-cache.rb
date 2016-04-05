@@ -4,8 +4,10 @@ require 'git_bpf/lib/repository'
 
 module ShareReReReMixin
   def options(opts)
+    repo = Repository.new(Dir.getwd)
+
     opts.work_tree = ".git/rr-cache"
-    opts.branch = "rr-cache"
+    opts.branch = repo.config(true, "--get", "gitbpf.rerebranch")
     opts.remote = "origin"
 
     [
