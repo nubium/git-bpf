@@ -68,6 +68,16 @@ class Repository
     end
   end
 
+  def reset
+    begin
+      cmd("reset", "--hard")
+      cmd("clean", "-f", "-d")
+    rescue
+      return ''
+    end
+  end
+
+
   def ref?(ref)
     begin
       cmd('show-ref', '--tags', '--heads', ref)

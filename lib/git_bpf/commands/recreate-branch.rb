@@ -41,7 +41,10 @@ class RecreateBranch < GitFlow/'recreate-branch'
         lambda { |n| opts.verbose = true }],
       ['-c', '--recreate-base',
        "Recreate base branch (automaticly fetch remote, checkout remote/base to some random name and recreate branch on it)",
-       lambda { |n| opts.recreateBranch = true}]
+       lambda { |n| opts.recreateBranch = true}],
+      ['-x', '--abort',
+        "Abort recreate branch (discard changes in rr-cache, delete temporary branches)",
+        lambda { |n| opts.abortRecreate = true}]
     ]
   end
 
@@ -51,10 +54,38 @@ class RecreateBranch < GitFlow/'recreate-branch'
       terminate
     end
 
+
     source = argv.pop
 
     # If no new branch name provided, replace the source branch.
     opts.branch = source if opts.branch == nil
+
+    if opts.abortRecreate
+      ohai "Trying to abort recreate and delete old junk"
+      rerere_path = File.join("./.git/", 'rr-cache')
+      rerere = Repository.new rerere_path
+      rerere.reset
+      result = git('for-each-ref', '--format="%(refname)"', 'refs/heads')
+      for result_entry in result.split("\n")
+          entry = result_entry.sub("refs/heads/", "")
+          if entry.start_with? ("BPF_temp_")
+            puts "Deleting " + entry
+            git('branch', '-D', entry)
+          end
+      end
+      if opts.recreateBranch
+        git('branch', '-D', opts.base)
+      end
+      tmp_source = "#{@@prefix}-#{opts.branch}"
+      puts "Trying to delete #{tmp_source}"
+      begin
+        git('branch', '-D', tmp_source)
+      rescue
+        opoo "Can't delete temporary branch #{tmp_source}"
+      end
+      ohai "Done"
+      terminate
+    end
 
     if not refExists? opts.base
       terminate "Cannot find reference '#{opts.base}' to use as a base for new branch: #{opts.branch}."
@@ -68,7 +99,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
 
     if opts.recreateBranch
       git('fetch', opts.remote)
-      name = opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
+      name = "BPF_temp_" + opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
       ohai "Checkouting #{opts.remote + '/' + opts.base} as #{name}"
       git('checkout', '-B', name, opts.remote + '/' + opts.base)
       git('checkout', source)
