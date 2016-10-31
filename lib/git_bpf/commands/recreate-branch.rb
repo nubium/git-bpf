@@ -100,7 +100,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
     if opts.recreateBranch
       git('fetch', opts.remote)
       name = "BPF_temp_" + opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
-      ohai "Checkouting #{opts.remote + '/' + opts.base} as #{name}"
+      ohai "Checkout #{opts.remote + '/' + opts.base} as #{name}"
       git('checkout', '-B', name, opts.remote + '/' + opts.base)
       git('checkout', source)
       opts.base = name
@@ -251,61 +251,51 @@ class RecreateBranch < GitFlow/'recreate-branch'
 
   def getMergedBranches(base, source, verbose)
     repo = Repository.new(Dir.getwd)
-    remote_recreate = repo.config(true, "--get", "gitbpf.remoterecreate").chomp
-    remote_recreate = remote_recreate.empty? ? '*' : remote_recreate
+    remote_recreate = repo.config(true, "--get", "gitbpf.remotename").chomp
 
     branches = []
 
-    merges = git('rev-list', '--parents', '--merges', '--first-parent', '--reverse', '--format=oneline', "#{base}...#{source}").strip.split("\n")
-    all_merges = git('rev-list', '--parents', '--merges', '--reverse', '--format=oneline', "#{base}...#{source}").strip.split("\n")
-    diff_merges = all_merges - merges
-
-    unless diff_merges.empty?
-      puts "\nINFO: Following merge commits will be skipped:"
-      puts diff_merges.shell_list
-      puts '     (Possible reason: They have been merged into other merged branches.'
-      puts "      OR: Mainline branch has been merged into task branch.)"
-    end
+    merges = git('rev-list', '--merges', '--reverse', '--format=oneline', "#{base}...#{source}").strip.split("\n")
 
     if verbose
       puts "\nINFO: Branches found between #{base} and #{source}:\n#{merges.shell_list}"
+      puts "\n"
     end
 
+    remote_branches = git('branch', '--remote').split("\n")
+    remote_branches.map! &:strip
+
     merges.each do |commits|
-      parents = commits.split("\s", 4)
-      merge_hash, first_parent_hash, branch_hash, commit_name = parents
+      commit_name = commits.split("\s", 2)[1]
 
-      name = git('name-rev', branch_hash, '--name-only', "--refs=#{remote_recreate}").strip
-      alt_base = git('name-rev', base, '--name-only').strip
-      remote_heads = /\w+\/HEAD/
+      match = commit_name.match(/^Merge (?:remote-tracking )?branch '((.*\/)?(.*))'(.*)?$/)
 
-      if name.include? source or name.include? alt_base or name.match remote_heads
-        if verbose
-          puts "INFO: <#{commit_name}> skipped because '#{name}' matches #{source} / #{alt_base} / #{remote_heads}"
-          puts '      Possible problem: Task branch has been forced.'
-          puts '      Solution: Do merge manually.'
-        end
-      elsif name.eql? 'undefined'
-        if verbose
-          puts "INFO: <#{commit_name}> skipped because '#{name}' is 'undefined'"
-          puts '      Possible problem: Task branch has been forced.'
-          puts '      Solution: Do merge manually.'
-        end
+      unless match
+        onoe "Can't match #{commit_name}"
+        next
+      end
+
+      remote = match[2]
+      remote = remote.gsub(/\//, '') unless match[2].nil?
+
+      branch_name = match[3]
+
+      if remote.nil?
+        opoo "Local merge detected for #{commit_name} !!!"
       else
-        # Make sure not to include the tilde part of a branch name (e.g. '~2')
-        # as this signifies a commit that's behind the head of the branch but
-        # we want to merge in the head of the branch.
-        name = name.partition('~')[0]
-        # This can lead to duplicate branches, because the name may have only
-        # differed in the tilde portion ('mybranch~1', 'mybranch~2', etc.)
-        if branches.include? name
-          if verbose
-            puts "INFO: <#{commit_name}> skipped because it's already in the list."
-         end
-        else
-          branches.push name
+        unless remote == remote_recreate
+          opoo "Different remote name #{remote}!=#{remote_recreate} for \"#{commit_name}\""
         end
       end
+
+
+      # TODO: This is not safe, but better than really slooooow ls-remote!
+      unless remote_branches.include? (remote_recreate + '/' + branch_name)
+        opoo "Can't find remote branch #{remote_recreate}/#{branch_name}. Skipping!"
+        next
+      end
+
+      branches.push remote_recreate + '/' + branch_name
     end
 
     puts "\n"
