@@ -255,7 +255,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
 
     branches = []
 
-    merges = git('rev-list', '--merges', '--reverse', '--format=oneline', "#{base}...#{source}").strip.split("\n")
+    merges = git('rev-list', '--merges', '--reverse', '--format=oneline', "#{base}..#{source}").strip.split("\n")
 
     if verbose
       puts "\nINFO: Branches found between #{base} and #{source}:\n#{merges.shell_list}"
