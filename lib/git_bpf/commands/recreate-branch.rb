@@ -247,6 +247,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
       ohai "6. Cleaning up temporary branches ('#{opts.base}')."
       git('branch', '-D', opts.base)
     end
+
+    git('branch', '-u', repo.config(true, "--get", "gitbpf.remotename").chomp + '/' + source, source)
   end
 
   def getMergedBranches(base, source, verbose)
