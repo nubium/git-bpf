@@ -42,7 +42,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       ['-c', '--recreate-base',
        "Recreate base branch (automaticly fetch remote, checkout remote/base to some random name and recreate branch on it)",
        lambda { |n| opts.recreateBranch = true}],
-      ['-x', '--abort',
+      ['-t', '--abort',
         "Abort recreate branch (discard changes in rr-cache, delete temporary branches)",
         lambda { |n| opts.abortRecreate = true}]
     ]
