@@ -139,6 +139,9 @@ class Init < GitFlow/'init'
     target.config(true, "gitbpf.remotename", opts.remote_name)
     target.config(true, "gitbpf.rerebranch", opts.rerere_branch)
 
+    target.config(true, 'gc.rerereunresolved', '64')
+    target.config(true, 'gc.rerereresolved', '64')
+
     rerere_path = File.join(target.git_dir, 'rr-cache')
     target_remote_url = !opts.remote_url.nil? ? opts.remote_url : target.remoteUrl(opts.remote_name)
     target.config(true, "gitbpf.remoteurl", target_remote_url)
