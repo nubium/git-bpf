@@ -151,11 +151,23 @@ class RecreateBranch < GitFlow/'recreate-branch'
       terminate "Branches to be merged:\n#{branches.shell_list}"
     end
 
+    excluded_branches = opts.exclude.map(&:clone)
+
     # Remove from the list any branches that have been explicity excluded using
     # the -x option
     branches.reject! do |item|
       stripped = item.gsub /^remotes\/\w+\/([\w\-\/]+)$/, '\1'
+      puts "Excluding branch #{item}\n" if opts.exclude.include? stripped
+      excluded_branches -= [stripped]
       opts.exclude.include? stripped
+    end
+
+    if opts.exclude.length > 0
+      puts "\n"
+    end
+
+    excluded_branches.each do |item|
+      opoo "Exclude branch - No match for branch #{item}"
     end
 
     # Prompt to continue.
