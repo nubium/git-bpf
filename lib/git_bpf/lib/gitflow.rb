@@ -166,7 +166,7 @@ HELP
     opt.on('-h', '--help', 'Display this help') do
       GitFlow.pager; puts opt; throw :exit
     end
-    opt.on('--trace', 'Display traces') { GitFlow.trace = true }
+    opt.on('-t', '--trace', 'Display traces') { GitFlow.trace = true }
     optparse
   end
 
