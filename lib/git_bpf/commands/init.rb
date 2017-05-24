@@ -100,10 +100,15 @@ class Init < GitFlow/'init'
 
     scripts = File.join(target.path, '.git', opts.script_dir_name)
 
-    if not File.exists? scripts
+    if not File.exists? scripts and not File.symlink? scripts
       File.symlink source_path, scripts
     elsif File.symlink? scripts
       opoo "Symbolic link already exists."
+      if promptYN "Update symlink?"
+        File.unlink scripts
+        File.symlink source_path, scripts
+        opoo "Symbolic link updated."
+      end
     else
       terminate "Cannot create symbolic link (#{scripts})."
     end
