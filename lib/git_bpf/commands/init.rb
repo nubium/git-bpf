@@ -18,6 +18,7 @@ class Init < GitFlow/'init'
     opts.remote_name = 'origin'
     opts.rerere_branch = 'rr-cache'
     opts.remote_url = nil
+    opts.default_base_name = nil
 
     [
       ['-d', '--directory-name NAME',
@@ -32,6 +33,9 @@ class Init < GitFlow/'init'
       ['-b', '--rerere-branch NAME',
         "",
         lambda { |n| opts.rerere_branch = n }],
+      ['-a', '--base NAME', "Default base name to recreate",
+        lambda { |n| opts.default_base_name = n }
+      ],
     ]
   end
 
@@ -143,6 +147,12 @@ class Init < GitFlow/'init'
 
     target.config(true, "gitbpf.remotename", opts.remote_name)
     target.config(true, "gitbpf.rerebranch", opts.rerere_branch)
+
+    if opts.default_base_name
+      target.config(true, "rerere.defaultbasename", opts.default_base_name)
+    else
+      target.config(true, '--unset', "rerere.defaultbasename", ignore: true)
+    end
 
     target.config(true, 'gc.rerereunresolved', '64')
     target.config(true, 'gc.rerereresolved', '64')

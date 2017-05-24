@@ -166,6 +166,9 @@ HELP
     opt.on('-h', '--help', 'Display this help') do
       GitFlow.pager; puts opt; throw :exit
     end
+    opt.on('--version', 'Show version') do
+      puts "Git-BPF #{GitBpf::VERSION}"; throw :exit
+    end
     opt.on('-t', '--trace', 'Display traces') { GitFlow.trace = true }
     optparse
   end
@@ -238,10 +241,11 @@ HELP
       STDERR.puts(*str) if GitFlow.trace
     end
 
-    def git(*args)
+    def git(*args, ignore: false)
       cmd = 'git ' + args.map { |arg| arg[' '] ? %Q{"#{arg}"} : arg }.join(' ')
       trace cmd
       `#{cmd}`.tap {
+        return nil if $?.exitstatus != 0 and ignore
         fail "GIT command `#{cmd}` failed with status #{$?.exitstatus}" unless $?.exitstatus == 0
       }
     end

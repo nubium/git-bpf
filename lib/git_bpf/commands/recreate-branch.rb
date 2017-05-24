@@ -14,7 +14,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
 
 
   def options(opts)
-    opts.base = 'master'
+    opts.base = nil
     opts.exclude = []
 
     [
@@ -87,14 +87,29 @@ class RecreateBranch < GitFlow/'recreate-branch'
       terminate
     end
 
-    if not refExists? opts.base
-      terminate "Cannot find reference '#{opts.base}' to use as a base for new branch: #{opts.branch}."
-    end
-
     unless opts.remote
       repo = Repository.new(Dir.getwd)
       remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
       opts.remote = remote_name.empty? ? 'origin' : remote_name
+    end
+
+    unless opts.base
+      base = repo.config(true, "--get", "rerere.defaultbasename", ignore: true)
+      ohai "Using base: #{base}"
+      opts.base = base.chomp if base
+
+      # Backward compatibility
+      unless opts.base
+        opts.base = 'master'
+      end
+    end
+
+    if GitFlow.trace
+      ohai "Using base: #{opts.base}"
+    end
+
+    if not refExists? opts.base
+      terminate "Cannot find reference '#{opts.base}' to use as a base for new branch: #{opts.branch}."
     end
 
     if opts.recreateBranch
