@@ -67,14 +67,11 @@ class RecreateBranch < GitFlow/'recreate-branch'
       rerere.reset
       result = git('for-each-ref', '--format="%(refname)"', 'refs/heads')
       for result_entry in result.split("\n")
-          entry = result_entry.sub("refs/heads/", "")
-          if entry.start_with? ("BPF_temp_")
-            puts "Deleting " + entry
-            git('branch', '-D', entry)
-          end
-      end
-      if opts.recreateBranch
-        git('branch', '-D', opts.base)
+        entry = result_entry.sub("refs/heads/", "")
+        if entry.start_with? ("BPF_temp_")
+          puts "Deleting " + entry
+          git('branch', '-D', entry)
+        end
       end
       tmp_source = "#{@@prefix}-#{opts.branch}"
       puts "Trying to delete #{tmp_source}"
