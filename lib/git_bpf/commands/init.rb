@@ -19,6 +19,7 @@ class Init < GitFlow/'init'
     opts.rerere_branch = 'rr-cache'
     opts.remote_url = nil
     opts.default_base_name = nil
+    opts.create_hooks = true
 
     [
       ['-d', '--directory-name NAME',
@@ -36,6 +37,9 @@ class Init < GitFlow/'init'
       ['-a', '--base NAME', "Default base name to recreate",
         lambda { |n| opts.default_base_name = n }
       ],
+      ['-s', '--skip-create-hooks', "Skip create hooks (eg. recreate-branch without sharing with git)",
+       lambda { |n| opts.create_hooks = false }
+      ]
     ]
   end
 
@@ -95,6 +99,8 @@ class Init < GitFlow/'init'
     # Perform some cleanup in case this repo was previously initalized.
     target.config(true, '--remove-section', 'gitbpf') rescue nil
     removeCommandAliases target
+
+    # Delete symlinks with same version
     rmSymlinks(target.git_dir, source_path)
 
     #
@@ -196,35 +202,38 @@ class Init < GitFlow/'init'
     #
     # 4. Symlink git-hooks.
     #
-    hooks_dir = File.join(target.git_dir, "hooks")
-    hooks = [
-      'post-commit',
-      'post-checkout',
-      'pre-push'
-    ]
 
-    ohai "4. Creating symbolic links to git-hooks:", hooks.shell_list
+    if opts.create_hooks
+      hooks_dir = File.join(target.git_dir, "hooks")
+      hooks = [
+          'post-commit',
+          'post-checkout',
+          'pre-push'
+      ]
 
-    hooks.each do |name|
-      target_hook_path = File.join(hooks_dir, name)
-      source_hook_path = File.join(scripts, "hooks", "#{name}.rb")
-      files = Dir.glob("#{target_hook_path}*")
-      write = files.empty?
+      ohai "4. Creating symbolic links to git-hooks:", hooks.shell_list
 
-      if not write and promptYN "Existing hook '#{name}' detected, overwrite?"
-        write = File.delete(files.shell_s) > 0
+      hooks.each do |name|
+        target_hook_path = File.join(hooks_dir, name)
+        source_hook_path = File.join(scripts, "hooks", "#{name}.rb")
+        files = Dir.glob("#{target_hook_path}*")
+        write = files.empty?
+
+        if not write and promptYN "Existing hook '#{name}' detected, overwrite?"
+          write = File.delete(files.shell_s) > 0
+        end
+
+        if write
+          File.symlink source_hook_path, target_hook_path
+        else
+          opoo "Couldn't link '#{name}' hook as it already exists."
+        end
       end
 
-      if write
-        File.symlink source_hook_path, target_hook_path
-      else
-        opoo "Couldn't link '#{name}' hook as it already exists."
-      end
+      #
+      # Success!
+      #
+      ohai "Success!"
     end
-
-    #
-    # Success!
-    #
-    ohai "Success!"
   end
 end
