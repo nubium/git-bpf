@@ -1,5 +1,6 @@
 require 'git_bpf/lib/gitflow'
 require 'git_bpf/lib/git-helpers'
+require 'git_bpf/lib/git-trace'
 
 #
 # recreate_branch: Recreate a branch based on the merge commits it's comprised of.
@@ -16,6 +17,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
   def options(opts)
     opts.base = nil
     opts.exclude = []
+    opts.continueRecreate = false
+    opts.abortRecreate = false
 
     [
       ['-a', '--base NAME',
@@ -45,6 +48,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
       ['-o', '--abort',
         "Abort recreate branch (discard changes in rr-cache, delete temporary branches)",
         lambda { |n| opts.abortRecreate = true}],
+      ['', '--continue', "Continue with recreate-branch",
+        lambda { |n| opts.continueRecreate = true}],
       ['', '--merges',
         "Show merge command",
         lambda { |n| opts.showMergeCommand = true }
@@ -53,7 +58,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
   end
 
   def execute(opts, argv)
-    if argv.length != 1
+    if argv.length != 1 && opts.continueRecreate == nil
       run('recreate-branch', '--help')
       terminate
     end
@@ -63,6 +68,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
 
     # If no new branch name provided, replace the source branch.
     opts.branch = source if opts.branch == nil
+
+    gt = GitTrace.new
 
     if opts.abortRecreate
       ohai "Trying to abort recreate and delete old junk"
@@ -88,145 +95,172 @@ class RecreateBranch < GitFlow/'recreate-branch'
       terminate
     end
 
-    unless opts.remote
-      repo = Repository.new(Dir.getwd)
-      remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
-      opts.remote = remote_name.empty? ? 'origin' : remote_name
-    end
+    unless opts.continueRecreate
+      unless opts.remote
+        repo = Repository.new(Dir.getwd)
+        remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
+        opts.remote = remote_name.empty? ? 'origin' : remote_name
+      end
 
-    opts.selectedBranch = git('rev-parse', '--abbrev-ref', 'HEAD')
+      opts.selectedBranch = git('rev-parse', '--abbrev-ref', 'HEAD')
 
-    unless opts.base
-      base = repo.config(true, "--get", "rerere.defaultbasename", ignore: true)
-      ohai "Using base: #{base}"
-      opts.base = base.chomp if base
-
-      # Backward compatibility
       unless opts.base
-        opts.base = 'master'
-      end
+        base = repo.config(true, "--get", "rerere.defaultbasename", ignore: true)
+        ohai "Using base: #{base}"
+        opts.base = base.chomp if base
 
-    end
-
-    opts.defaultBase = opts.base
-
-    if GitFlow.trace
-      ohai "Using base: #{opts.base}"
-    end
-
-    if not refExists? opts.base
-      terminate "Cannot find reference '#{opts.base}' to use as a base for new branch: #{opts.branch}."
-    end
-
-    if opts.recreateBranch
-      git('fetch', opts.remote)
-      name = "BPF_temp_" + opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
-      ohai "Checkout #{opts.remote + '/' + opts.base} as #{name}"
-      git('checkout', '-B', name, opts.remote + '/' + opts.base)
-      git('checkout', source)
-      opts.base = name
-    end
-
-    if opts.discard
-      git('fetch', opts.remote)
-      if branchExists?(source, opts.remote)
-        opoo "This will delete your local '#{source}' branch if it exists and create it afresh from the #{opts.remote} remote."
-        if not promptYN "Continue?"
-          terminate "Aborting."
+        # Backward compatibility
+        unless opts.base
+          opts.base = 'master'
         end
-        git('checkout', opts.base)
-        git('branch', '-D', source) if branchExists? source
-        git('checkout', source)
+
       end
+
+      opts.defaultBase = opts.base
+
+      if GitFlow.trace
+        ohai "Using base: #{opts.base}"
+      end
+
+      if not refExists? opts.base
+        terminate "Cannot find reference '#{opts.base}' to use as a base for new branch: #{opts.branch}."
+      end
+
+      if opts.recreateBranch
+        git('fetch', opts.remote)
+        name = "BPF_temp_" + opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
+        ohai "Checkout #{opts.remote + '/' + opts.base} as #{name}"
+        gt.recreate_branch_trace(name)
+        git('checkout', '-B', name, opts.remote + '/' + opts.base)
+        git('checkout', source)
+        opts.base = name
+      end
+
+      if opts.discard
+        git('fetch', opts.remote)
+        if branchExists?(source, opts.remote)
+          opoo "This will delete your local '#{source}' branch if it exists and create it afresh from the #{opts.remote} remote."
+          if not promptYN "Continue?"
+            terminate "Aborting."
+          end
+          git('checkout', opts.base)
+          git('branch', '-D', source) if branchExists? source
+          git('checkout', source)
+        end
+      end
+
+      # Perform some validation.
+      if not branchExists? source
+        terminate "Cannot recreate branch #{source} as it doesn't exist."
+      end
+
+      if opts.branch != source and branchExists? opts.branch
+        terminate "Cannot create branch #{opts.branch} as it already exists."
+      end
+
+      #
+      # 1. Compile a list of merged branches from source branch.
+      #
+      ohai "1. Processing branch '#{source}' for merge-commits..."
+
+      branches = getMergedBranches(opts.base, source, opts.verbose)
+
+      if branches.empty?
+        cleanTemporaryBaseBranch(opts)
+        terminate "No feature branches detected, '#{source}' matches '#{opts.base}'."
+      end
+
+      if opts.list
+        cleanTemporaryBaseBranch(opts)
+        terminate "Branches to be merged:\n#{branches.shell_list}"
+      end
+
+      excluded_branches = opts.exclude.map(&:clone)
+
+      # Remove from the list any branches that have been explicity excluded using
+      # the -x option
+      branches.reject! do |item|
+        stripped = item.gsub /^remotes\/\w+\/([\w\-\/]+)$/, '\1'
+        puts "Excluding branch #{item}\n" if opts.exclude.include? stripped
+        excluded_branches -= [stripped]
+        opts.exclude.include? stripped
+      end
+
+      if opts.exclude.length > 0
+        puts "\n"
+      end
+
+      excluded_branches.each do |item|
+        opoo "Exclude branch - No match for branch #{item}"
+      end
+
+      if opts.showMergeCommand
+        ohai "Feel free to run following commands on branch #{opts.defaultBase}:"
+        branches.each { |s| s.prepend("git merge --no-ff --no-edit ")}
+        puts branches.join(" && ")
+        ohai "Switching back"
+        git('checkout', opts.selectedBranch)
+        cleanTemporaryBaseBranch(opts)
+        terminate
+      end
+
+      # Prompt to continue.
+      opoo "The following branches will be merged when the new #{opts.branch} branch is created:\n#{branches.shell_list}"
+      puts
+      puts "If you see something unexpected check:"
+      puts "a) that your '#{source}' branch is up to date"
+      unless opts.recreateBranch
+        puts "b) if '#{opts.base}' is a branch, make sure it is also up to date."
+      end
+      opoo "If there are any non-merge commits in '#{source}', they will not be included in '#{opts.branch}'. You have been warned."
+      if not promptYN "Proceed with #{source} branch recreation?"
+        cleanTemporaryBaseBranch(opts)
+        terminate "Aborting."
+      end
+
+      # Remove traces - user continue with recreate
+      gt.remove_trace
+
+      #
+      # 2. Backup existing local source branch.
+      #
+      tmp_source = "#{@@prefix}-#{source}"
+      ohai "2. Creating backup of '#{source}', '#{tmp_source}'..."
+
+      gt.set_source_branch(source)
+      gt.set_opts(Marshal.dump(opts))
+
+      if branchExists? tmp_source
+        terminate "Cannot create branch #{tmp_source} as one already exists. To continue, #{tmp_source} must be removed."
+      end
+
+      git('branch', '-m', source, tmp_source)
+
+      #
+      # 3. Create new branch based on 'base'.
+      #
+      ohai "3. Creating new '#{opts.branch}' branch based on '#{opts.base}'..."
+
+      git('checkout', '-b', opts.branch, opts.base, '--quiet')
+      gt.replace_traces(branches)
+    else
+      if gt.empty?
+        terminate "Can't continue -- trace is empty"
+      end
+
+      source = gt.get_source_branch
+      opts = Marshal.load(gt.get_opts)
+      tmp_source = "#{@@prefix}-#{source}"
+      branches = gt.get_merges
+
+      unless opts.remote
+        repo = Repository.new(Dir.getwd)
+        remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
+        opts.remote = remote_name.empty? ? 'origin' : remote_name
+      end
+
+      opoo "The following branches will be merged to actual branch: \n#{branches.shell_list}"
     end
-
-    # Perform some validation.
-    if not branchExists? source
-      terminate "Cannot recreate branch #{source} as it doesn't exist."
-    end
-
-    if opts.branch != source and branchExists? opts.branch
-      terminate "Cannot create branch #{opts.branch} as it already exists."
-    end
-
-    #
-    # 1. Compile a list of merged branches from source branch.
-    #
-    ohai "1. Processing branch '#{source}' for merge-commits..."
-
-    branches = getMergedBranches(opts.base, source, opts.verbose)
-
-    if branches.empty?
-      cleanTemporaryBaseBranch(opts)
-      terminate "No feature branches detected, '#{source}' matches '#{opts.base}'."
-    end
-
-    if opts.list
-      cleanTemporaryBaseBranch(opts)
-      terminate "Branches to be merged:\n#{branches.shell_list}"
-    end
-
-    excluded_branches = opts.exclude.map(&:clone)
-
-    # Remove from the list any branches that have been explicity excluded using
-    # the -x option
-    branches.reject! do |item|
-      stripped = item.gsub /^remotes\/\w+\/([\w\-\/]+)$/, '\1'
-      puts "Excluding branch #{item}\n" if opts.exclude.include? stripped
-      excluded_branches -= [stripped]
-      opts.exclude.include? stripped
-    end
-
-    if opts.exclude.length > 0
-      puts "\n"
-    end
-
-    excluded_branches.each do |item|
-      opoo "Exclude branch - No match for branch #{item}"
-    end
-
-    # Prompt to continue.
-    opoo "The following branches will be merged when the new #{opts.branch} branch is created:\n#{branches.shell_list}"
-    if opts.showMergeCommand
-      ohai "Feel free to run following commands on branch #{opts.defaultBase}:"
-      branches.each { |s| s.prepend("git merge --no-ff --no-edit ")}
-      puts branches.join(" && ")
-      ohai "Switching back"
-      git('checkout', opts.selectedBranch)
-      cleanTemporaryBaseBranch(opts)
-      terminate
-    end
-
-    puts
-    puts "If you see something unexpected check:"
-    puts "a) that your '#{source}' branch is up to date"
-    unless opts.recreateBranch
-      puts "b) if '#{opts.base}' is a branch, make sure it is also up to date."
-    end
-    opoo "If there are any non-merge commits in '#{source}', they will not be included in '#{opts.branch}'. You have been warned."
-    if not promptYN "Proceed with #{source} branch recreation?"
-      cleanTemporaryBaseBranch(opts)
-      terminate "Aborting."
-    end
-
-    #
-    # 2. Backup existing local source branch.
-    #
-    tmp_source = "#{@@prefix}-#{source}"
-    ohai "2. Creating backup of '#{source}', '#{tmp_source}'..."
-
-    if branchExists? tmp_source
-      terminate "Cannot create branch #{tmp_source} as one already exists. To continue, #{tmp_source} must be removed."
-    end
-
-    git('branch', '-m', source, tmp_source)
-
-    #
-    # 3. Create new branch based on 'base'.
-    #
-    ohai "3. Creating new '#{opts.branch}' branch based on '#{opts.base}'..."
-
-    git('checkout', '-b', opts.branch, opts.base, '--quiet')
 
     #
     # 4. Begin merging in feature branches.
@@ -234,6 +268,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
     ohai "4. Merging in feature branches..."
 
     branches.each do |branch|
+      gt.apply_merge(branch)
+
       begin
         puts " - '#{branch}'"
         # Attempt to merge in the branch. If there is no conflict at all, we
@@ -266,6 +302,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
       end
     end
 
+    gt.remove_trace
+
     #
     # 5. Clean up.
     #
@@ -279,7 +317,12 @@ class RecreateBranch < GitFlow/'recreate-branch'
 
     cleanTemporaryBaseBranch(opts)
 
-    git('branch', '-u', repo.config(true, "--get", "gitbpf.remotename").chomp + '/' + source, source)
+    repo = Repository.new(Dir.getwd)
+    begin
+      git('branch', '-u', repo.config(true, "--get", "gitbpf.remotename").chomp + '/' + source, source)
+    rescue
+      opoo "Can't set remote tracking branch"
+    end
   end
 
   def getMergedBranches(base, source, verbose)
