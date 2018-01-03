@@ -44,7 +44,11 @@ class RecreateBranch < GitFlow/'recreate-branch'
        lambda { |n| opts.recreateBranch = true}],
       ['-o', '--abort',
         "Abort recreate branch (discard changes in rr-cache, delete temporary branches)",
-        lambda { |n| opts.abortRecreate = true}]
+        lambda { |n| opts.abortRecreate = true}],
+      ['', '--merges',
+        "Show merge command",
+        lambda { |n| opts.showMergeCommand = true }
+      ]
     ]
   end
 
@@ -90,6 +94,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
       opts.remote = remote_name.empty? ? 'origin' : remote_name
     end
 
+    opts.selectedBranch = git('rev-parse', '--abbrev-ref', 'HEAD')
+
     unless opts.base
       base = repo.config(true, "--get", "rerere.defaultbasename", ignore: true)
       ohai "Using base: #{base}"
@@ -99,7 +105,10 @@ class RecreateBranch < GitFlow/'recreate-branch'
       unless opts.base
         opts.base = 'master'
       end
+
     end
+
+    opts.defaultBase = opts.base
 
     if GitFlow.trace
       ohai "Using base: #{opts.base}"
@@ -178,6 +187,16 @@ class RecreateBranch < GitFlow/'recreate-branch'
 
     # Prompt to continue.
     opoo "The following branches will be merged when the new #{opts.branch} branch is created:\n#{branches.shell_list}"
+    if opts.showMergeCommand
+      ohai "Feel free to run following commands on branch #{opts.defaultBase}:"
+      branches.each { |s| s.prepend("git merge --no-ff --no-edit ")}
+      puts branches.join(" && ")
+      ohai "Switching back"
+      git('checkout', opts.selectedBranch)
+      cleanTemporaryBaseBranch(opts)
+      terminate
+    end
+
     puts
     puts "If you see something unexpected check:"
     puts "a) that your '#{source}' branch is up to date"
