@@ -148,18 +148,12 @@ class RecreateBranch < GitFlow/'recreate-branch'
     branches = getMergedBranches(opts.base, source, opts.verbose)
 
     if branches.empty?
-      if opts.recreateBranch and opts.base
-        ohai "Cleaning up temporary branches ('#{opts.base}')."
-        git('branch', '-D', opts.base)
-      end
+      cleanTemporaryBaseBranch(opts)
       terminate "No feature branches detected, '#{source}' matches '#{opts.base}'."
     end
 
     if opts.list
-      if opts.recreateBranch and opts.base
-        ohai "Cleaning up temporary branches ('#{opts.base}')."
-        git('branch', '-D', opts.base)
-      end
+      cleanTemporaryBaseBranch(opts)
       terminate "Branches to be merged:\n#{branches.shell_list}"
     end
 
@@ -192,10 +186,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
     end
     opoo "If there are any non-merge commits in '#{source}', they will not be included in '#{opts.branch}'. You have been warned."
     if not promptYN "Proceed with #{source} branch recreation?"
-      if opts.recreateBranch and opts.base
-        ohai "Cleaning up temporary branches ('#{opts.base}')."
-        git('branch', '-D', opts.base)
-      end
+      cleanTemporaryBaseBranch(opts)
       terminate "Aborting."
     end
 
@@ -267,10 +258,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('branch', '-D', tmp_source)
     end
 
-    if opts.recreateBranch and opts.base
-      ohai "6. Cleaning up temporary branches ('#{opts.base}')."
-      git('branch', '-D', opts.base)
-    end
+    cleanTemporaryBaseBranch(opts)
 
     git('branch', '-u', repo.config(true, "--get", "gitbpf.remotename").chomp + '/' + source, source)
   end

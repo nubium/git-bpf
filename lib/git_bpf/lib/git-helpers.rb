@@ -85,6 +85,13 @@ class String
 end
 
 module GitHelpersMixin
+  def cleanTemporaryBaseBranch(opts)
+    if opts.recreateBranch and opts.base
+      ohai "Cleaning up temporary branches ('#{opts.base}')."
+      git('branch', '-D', opts.base)
+    end
+  end
+
   def context(work_tree, git_dir, *args)
     # Git pull requires absolute paths when executed from outside of the
     # repository's work tree.
