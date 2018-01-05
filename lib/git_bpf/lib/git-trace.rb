@@ -39,7 +39,7 @@ class GitTrace
   end
 
   def set_opts(opts)
-    File.open('.git/.gitbpf-opts', 'wb') {|f| f.write(opts)}
+    File.open('.git/.gitbpf-opts', 'wb') {|f| f.write(Marshal.dump(opts))}
   end
 
 
@@ -52,7 +52,7 @@ class GitTrace
   end
 
   def get_opts()
-    File.binread('.git/.gitbpf-opts')
+    Marshal.load(File.binread('.git/.gitbpf-opts'))
   end
 
 

@@ -228,7 +228,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       ohai "2. Creating backup of '#{source}', '#{tmp_source}'..."
 
       gt.set_source_branch(source)
-      gt.set_opts(Marshal.dump(opts))
+      gt.set_opts(opts)
 
       if branchExists? tmp_source
         terminate "Cannot create branch #{tmp_source} as one already exists. To continue, #{tmp_source} must be removed."
@@ -249,7 +249,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       end
 
       source = gt.get_source_branch
-      opts = Marshal.load(gt.get_opts)
+      opts = gt.get_opts
       tmp_source = "#{@@prefix}-#{source}"
       branches = gt.get_merges
 
