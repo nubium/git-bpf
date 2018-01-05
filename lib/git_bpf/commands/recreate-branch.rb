@@ -64,6 +64,13 @@ class RecreateBranch < GitFlow/'recreate-branch'
     end
 
 
+    if opts.continueRecreate
+      terminate "Parameter --continue can't be used with another parameter" if opts.base || opts.branch || opts.exclude.length > 0 ||
+          opts.list || opts.discard || opts.remote || opts.verbose || opts.recreateBranch || opts.abortRecreate || opts.showMergeCommand
+    end
+
+
+
     source = argv.pop
 
     # If no new branch name provided, replace the source branch.
