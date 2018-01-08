@@ -251,7 +251,7 @@ HELP
       end
       trace cmd
       `#{cmd}`.tap {
-        return nil if return_git_code == false and ignore_fail
+        return nil if return_git_code == false and ignore_fail and $?.exitstatus != 0
         return $?.exitstatus if $?.exitstatus != 0 and ignore_fail and return_git_code
         fail "GIT command `#{cmd}` failed with status #{$?.exitstatus}" unless $?.exitstatus == 0
       }
