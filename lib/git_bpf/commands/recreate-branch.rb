@@ -266,6 +266,13 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('checkout', '-b', opts.branch, opts.base, '--quiet')
       gt.replace_traces(branches)
     else
+      is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true) == 128
+
+      if is_in_merge
+        opoo "Please complete merge before continue"
+        terminate
+      end
+
       checkInRecreateProcess(gt)
 
       source = gt.get_source_branch
