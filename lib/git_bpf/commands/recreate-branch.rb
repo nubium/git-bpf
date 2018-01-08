@@ -87,7 +87,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       checkInRecreateProcess(gt)
 
       # This command returns 128 if git in merge process otherwise do nothing
-      is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true) == 128
+      is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true, return_git_code: true) == 128
 
       if is_in_merge
         git('merge', '--abort')
@@ -266,7 +266,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('checkout', '-b', opts.branch, opts.base, '--quiet')
       gt.replace_traces(branches)
     else
-      is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true) == 128
+      is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true, return_git_code: true) == 128
 
       if is_in_merge
         opoo "Please complete merge before continue"
