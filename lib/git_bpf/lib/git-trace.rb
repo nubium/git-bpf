@@ -22,6 +22,10 @@ class GitTrace
 
 
   def remove_trace()
+    unless @file.closed?
+      @file.close
+    end
+
     File.unlink('.git/.gitbpf-trace') if File.exists? '.git/.gitbpf-trace'
     File.unlink('.git/.gitbpf-opts') if File.exists? '.git/.gitbpf-opts'
     @file = File.open('.git/.gitbpf-trace', 'a+')
@@ -39,7 +43,9 @@ class GitTrace
   end
 
   def set_opts(opts)
-    File.open('.git/.gitbpf-opts', 'wb') {|f| f.write(Marshal.dump(opts))}
+    file = File.open('.git/.gitbpf-opts', 'wb')
+    file.write(Marshal.dump(opts))
+    file.close
   end
 
 
