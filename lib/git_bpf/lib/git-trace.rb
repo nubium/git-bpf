@@ -12,16 +12,16 @@ class GitTrace
     @file.write(merges.join("\n"))
   end
 
-  def return_control_structures()
+  def return_control_structures
     @file.rewind
   end
 
-  def empty?()
+  def empty?
     get_merges.count == 0
   end
 
 
-  def remove_trace()
+  def remove_trace
     unless @file.closed?
       @file.close
     end
@@ -49,7 +49,7 @@ class GitTrace
   end
 
 
-  def get_source_branch()
+  def get_source_branch
     @file.rewind
     @file.each {
         |line|
@@ -57,12 +57,12 @@ class GitTrace
     }
   end
 
-  def get_opts()
+  def get_opts
     Marshal.load(File.binread('.git/.gitbpf-opts'))
   end
 
 
-  def get_merges()
+  def get_merges
     merges = []
 
     @file.rewind
