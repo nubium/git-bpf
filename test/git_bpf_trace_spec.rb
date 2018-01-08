@@ -23,7 +23,7 @@ describe 'Git-BPF-TRACE' do
   
   it 'should not continue if trace is empty' do
     r = RecreateBranch.new
-    expect { r.run('recreate-branch', '--continue') }.to output("Can't continue -- trace is empty\n").to_stdout
+    expect { r.run('recreate-branch', '--continue') }.to output("Not in recreate-branch process\n").to_stdout
   end
 
   it 'should continue if conflict was resolved' do
@@ -63,4 +63,5 @@ describe 'Git-BPF-TRACE' do
     result = `git rev-list --merges --reverse --format=oneline master..integration`
     expect(result).to match(/Merge remote-tracking branch 'stable\/foo' into integration\n.*Merge remote-tracking branch 'stable\/foo2' into integration\n.*Merge remote-tracking branch 'stable\/foo3' into integration/m)
   end
+
 end

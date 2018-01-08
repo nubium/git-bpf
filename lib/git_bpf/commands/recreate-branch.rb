@@ -84,7 +84,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
     gt = GitTrace.new
 
     if opts.abortRecreate
-      checkInProgress(gt)
+      checkInRecreateProcess(gt)
 
       # This command returns 128 if git in merge process otherwise do nothing
       is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true) == 128
@@ -112,9 +112,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('checkout', tmp_source)
       git('branch', '-D', opts.branch)
       git('branch', '-m', opts.branch)
-      if opts.recreateBranch and opts.base
-        git('git', 'branch' , '-D', opts.base)
-      end
+      cleanTemporaryBaseBranch(opts)
 
       terminate
     end
@@ -153,7 +151,6 @@ class RecreateBranch < GitFlow/'recreate-branch'
         git('fetch', opts.remote)
         name = "BPF_temp_" + opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
         ohai "Checkout #{opts.remote + '/' + opts.base} as #{name}"
-        gt.recreate_branch_trace(name)
         git('checkout', '-B', name, opts.remote + '/' + opts.base)
         git('checkout', source)
         opts.base = name
@@ -241,8 +238,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
         terminate "Aborting."
       end
 
-      # Remove traces - user continue with recreate
-      gt.remove_trace
+      gt.start_recreate
 
       #
       # 2. Backup existing local source branch.
@@ -250,6 +246,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       tmp_source = "#{@@prefix}-#{source}"
       ohai "2. Creating backup of '#{source}', '#{tmp_source}'..."
 
+      gt.recreate_branch_trace(opts.base)
       gt.set_source_branch(source)
       gt.set_opts(opts)
 
@@ -267,12 +264,14 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('checkout', '-b', opts.branch, opts.base, '--quiet')
       gt.replace_traces(branches)
     else
-      checkInProgress(gt)
+      checkInRecreateProcess(gt)
 
       source = gt.get_source_branch
       opts = gt.get_opts
       tmp_source = "#{@@prefix}-#{source}"
       branches = gt.get_merges
+
+      gt.continue_recreate
 
       unless opts.remote
         repo = Repository.new(Dir.getwd)

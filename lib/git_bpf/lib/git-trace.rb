@@ -12,29 +12,20 @@ class GitTrace
     @file.write(merges.join("\n"))
   end
 
-  def return_control_structures
-    @file.rewind
-  end
-
-
   def empty?
     get_merges.count == 0
   end
 
-  def set_complete(is_complete)
-    @file.rewind
-    @file.write('/C=' + (is_complete ? 'true' : 'false')  + "\n" + @file.readlines.join("\n"))
+  def start_recreate
+    self.set_control_variable 'P', 'in_progress'
+  end
+
+  def continue_recreate
+    self.set_control_variable 'P', 'in_progress_continue'
   end
 
   def in_progress?
-    self.complete? || File.zero?('.git/.gitbpf-trace')
-  end
-
-  def complete?
-    @file.each {
-        |line|
-      return (line[3 .. -1].strip).gsub("\\n", "\n") if line[0, 3] == '/C='
-    }
+    ['in_progress', 'in_progress_continue'].include? self.get_control_variable 'P'
   end
 
   def remove_trace
@@ -49,28 +40,21 @@ class GitTrace
   end
 
   def recreate_branch_trace(trace)
-    @file.rewind
-    @file.write('/B=' + trace + "\n" + @file.readlines.join("\n"))
+    self.set_control_variable 'B', trace
   end
 
   def set_source_branch(source)
-    @file.rewind
-    @file.write('/S=' + source + "\n" + @file.readlines.join("\n"))
+    self.set_control_variable 'S', source
+  end
+
+  def get_source_branch
+    self.get_control_variable 'S'
   end
 
   def set_opts(opts)
     file = File.open('.git/.gitbpf-opts', 'wb')
     file.write(Marshal.dump(opts))
     file.close
-  end
-
-
-  def get_source_branch
-    @file.rewind
-    @file.each {
-        |line|
-      return (line[3 .. -1].strip).gsub("\\n", "\n") if line[0,3] == '/S='
-    }
   end
 
   def get_opts
@@ -110,4 +94,37 @@ class GitTrace
     @file = File.open('.git/.gitbpf-trace', 'a+')
     @file.rewind
   end
+
+  def get_control_variable(control_char)
+    @file.rewind
+    @file.each {
+        |line|
+      return (line[3 .. -1].strip).gsub("\\n", "\n") if line[0, 3] == "/#{control_char}="
+    }
+  end
+
+  def set_control_variable(control_char, control_value)
+    @file.rewind
+    tmp_file = File.open('.git/.gitbpf-trace.tmp', 'w+')
+    need_insert = true
+
+    @file.each do |line|
+      if line[0, 3] == "/#{control_char}="
+        tmp_file.write("/#{control_char}=#{control_value}\n")
+        need_insert = false
+      else
+        tmp_file.write(line.strip + "\n")
+      end
+    end
+
+    tmp_file.write("/#{control_char}=#{control_value}\n") if need_insert
+
+    tmp_file.close
+
+    @file.close
+    FileUtils.mv('.git/.gitbpf-trace.tmp', '.git/.gitbpf-trace')
+    @file = File.open('.git/.gitbpf-trace', 'a+')
+  end
+
+  protected :get_control_variable, :set_control_variable
 end
