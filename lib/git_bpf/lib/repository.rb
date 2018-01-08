@@ -46,18 +46,18 @@ class Repository
     end
   end
 
-  def cmd(*args, ignore: false)
-    self.class.git(*(self.ctx + args), ignore: ignore)
+  def cmd(*args, ignore_fail: false)
+    self.class.git(*(self.ctx + args), ignore_fail: ignore_fail)
   end
 
-  def config(local, *args, ignore: false)
+  def config(local, *args, ignore_fail: false)
     return nil if args.empty?
 
     command = ["config"]
     command.push "--local" if local
     command += args
 
-    cmd(*(self.ctx + command), ignore: ignore)
+    cmd(*(self.ctx + command), ignore_fail: ignore_fail)
   end
 
   def head

@@ -69,6 +69,11 @@ class RecreateBranch < GitFlow/'recreate-branch'
           opts.list || opts.discard || opts.remote || opts.verbose || opts.recreateBranch || opts.abortRecreate || opts.showMergeCommand
     end
 
+    if opts.abortRecreate
+      terminate "Parameter --abort can't be used with another parameter" if opts.base || opts.branch || opts.exclude.length > 0 ||
+          opts.list || opts.discard || opts.remote || opts.verbose || opts.recreateBranch || opts.continueRecreate || opts.showMergeCommand
+    end
+
 
 
     source = argv.pop
@@ -79,29 +84,40 @@ class RecreateBranch < GitFlow/'recreate-branch'
     gt = GitTrace.new
 
     if opts.abortRecreate
-      ohai "Trying to abort recreate and delete old junk"
+      checkInRecreateProcess(gt)
+
+      # This command returns 128 if git in merge process otherwise do nothing
+      is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true, return_git_code: true) == 128
+
+      if is_in_merge
+        git('merge', '--abort')
+      else
+        fail "Git recreate is not in progress or it's complete (not merging)"
+      end
+
+      ohai "Aborting"
+
       rerere_path = File.join("./.git/", 'rr-cache')
       rerere = Repository.new rerere_path
       rerere.reset
-      result = git('for-each-ref', '--format="%(refname)"', 'refs/heads')
-      for result_entry in result.split("\n")
-        entry = result_entry.sub("refs/heads/", "")
-        if entry.start_with? ("BPF_temp_")
-          puts "Deleting " + entry
-          git('branch', '-D', entry)
-        end
+
+      source = gt.get_source_branch
+      opts = gt.get_opts
+      tmp_source = "#{@@prefix}-#{source}"
+
+      unless opts.remote
+        repo = Repository.new(Dir.getwd)
+        remote_name = repo.config(true, "--get", "gitbpf.remotename").chomp
+        opts.remote = remote_name.empty? ? 'origin' : remote_name
       end
-      tmp_source = "#{@@prefix}-#{opts.branch}"
-      puts "Trying to delete #{tmp_source}"
-      begin
-        git('branch', '-D', tmp_source)
-      rescue
-        opoo "Can't delete temporary branch #{tmp_source}"
-      end
-      ohai "Done"
+
+      git('checkout', tmp_source)
+      git('branch', '-D', opts.branch)
+      git('branch', '-m', opts.branch)
+      cleanTemporaryBaseBranch(opts)
+
       terminate
     end
-
     unless opts.continueRecreate
       unless opts.remote
         repo = Repository.new(Dir.getwd)
@@ -112,7 +128,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       opts.selectedBranch = git('rev-parse', '--abbrev-ref', 'HEAD')
 
       unless opts.base
-        base = repo.config(true, "--get", "rerere.defaultbasename", ignore: true)
+        base = repo.config(true, "--get", "rerere.defaultbasename", ignore_fail: true)
         ohai "Using base: #{base}"
         opts.base = base.chomp if base
 
@@ -137,7 +153,6 @@ class RecreateBranch < GitFlow/'recreate-branch'
         git('fetch', opts.remote)
         name = "BPF_temp_" + opts.remote + "_" + opts.base + "_" + (Time.new().to_i.to_s) + rand().to_s
         ohai "Checkout #{opts.remote + '/' + opts.base} as #{name}"
-        gt.recreate_branch_trace(name)
         git('checkout', '-B', name, opts.remote + '/' + opts.base)
         git('checkout', source)
         opts.base = name
@@ -225,8 +240,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
         terminate "Aborting."
       end
 
-      # Remove traces - user continue with recreate
-      gt.remove_trace
+      gt.start_recreate
 
       #
       # 2. Backup existing local source branch.
@@ -234,6 +248,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       tmp_source = "#{@@prefix}-#{source}"
       ohai "2. Creating backup of '#{source}', '#{tmp_source}'..."
 
+      gt.recreate_branch_trace(opts.base)
       gt.set_source_branch(source)
       gt.set_opts(opts)
 
@@ -251,14 +266,21 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('checkout', '-b', opts.branch, opts.base, '--quiet')
       gt.replace_traces(branches)
     else
-      if gt.empty?
-        terminate "Can't continue -- trace is empty"
+      is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true, return_git_code: true) == 128
+
+      if is_in_merge
+        opoo "Please complete merge before continue"
+        terminate
       end
+
+      checkInRecreateProcess(gt)
 
       source = gt.get_source_branch
       opts = gt.get_opts
       tmp_source = "#{@@prefix}-#{source}"
       branches = gt.get_merges
+
+      gt.continue_recreate
 
       unless opts.remote
         repo = Repository.new(Dir.getwd)

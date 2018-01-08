@@ -138,4 +138,10 @@ module GitHelpersMixin
     end
     return true
   end
+
+  # @param [GitTrace] gt
+  def checkInRecreateProcess(gt)
+    terminate 'Not in recreate-branch process' unless gt.in_progress?
+  end
+
 end

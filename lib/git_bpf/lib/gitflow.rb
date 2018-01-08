@@ -241,11 +241,18 @@ HELP
       STDERR.puts(*str) if GitFlow.trace
     end
 
-    def git(*args, ignore: false)
+
+    # @param [TrueClass|FalseClass] return_git_code If returned output | git code
+    # @TODO Rewrite to return stream&git_code and for redirection use pipes
+    def git(*args, ignore_fail: false, redirect_output_to_null: false, return_git_code: false)
       cmd = 'git ' + args.map { |arg| arg[' '] ? %Q{"#{arg}"} : arg }.join(' ')
+      if redirect_output_to_null
+        cmd = cmd + ' &>/dev/null'
+      end
       trace cmd
       `#{cmd}`.tap {
-        return nil if $?.exitstatus != 0 and ignore
+        return nil if return_git_code == false and ignore_fail
+        return $?.exitstatus if $?.exitstatus != 0 and ignore_fail and return_git_code
         fail "GIT command `#{cmd}` failed with status #{$?.exitstatus}" unless $?.exitstatus == 0
       }
     end
