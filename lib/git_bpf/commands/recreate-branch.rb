@@ -95,6 +95,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
         fail "Git recreate is not in progress or it's complete (not merging)"
       end
 
+      ohai "Aborting"
+
       rerere_path = File.join("./.git/", 'rr-cache')
       rerere = Repository.new rerere_path
       rerere.reset
