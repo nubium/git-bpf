@@ -115,6 +115,8 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('branch', '-D', opts.branch)
       git('branch', '-m', opts.branch)
       cleanTemporaryBaseBranch(opts)
+      gt.remove_trace
+
 
       terminate
     end
@@ -240,21 +242,20 @@ class RecreateBranch < GitFlow/'recreate-branch'
         terminate "Aborting."
       end
 
-      gt.start_recreate
-
       #
       # 2. Backup existing local source branch.
       #
       tmp_source = "#{@@prefix}-#{source}"
       ohai "2. Creating backup of '#{source}', '#{tmp_source}'..."
 
-      gt.recreate_branch_trace(opts.base)
-      gt.set_source_branch(source)
-      gt.set_opts(opts)
-
       if branchExists? tmp_source
         terminate "Cannot create branch #{tmp_source} as one already exists. To continue, #{tmp_source} must be removed."
       end
+
+      gt.start_recreate
+      gt.recreate_branch_trace(opts.base)
+      gt.set_source_branch(source)
+      gt.set_opts(opts)
 
       git('branch', '-m', source, tmp_source)
 
