@@ -241,11 +241,11 @@ HELP
       STDERR.puts(*str) if GitFlow.trace
     end
 
-    def git(*args, ignore: false)
+    def git(*args, ignore_fail: false)
       cmd = 'git ' + args.map { |arg| arg[' '] ? %Q{"#{arg}"} : arg }.join(' ')
       trace cmd
       `#{cmd}`.tap {
-        return nil if $?.exitstatus != 0 and ignore
+        return $?.exitstatus if $?.exitstatus != 0 and ignore_fail
         fail "GIT command `#{cmd}` failed with status #{$?.exitstatus}" unless $?.exitstatus == 0
       }
     end

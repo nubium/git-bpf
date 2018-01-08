@@ -112,7 +112,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       opts.selectedBranch = git('rev-parse', '--abbrev-ref', 'HEAD')
 
       unless opts.base
-        base = repo.config(true, "--get", "rerere.defaultbasename", ignore: true)
+        base = repo.config(true, "--get", "rerere.defaultbasename", ignore_fail: true)
         ohai "Using base: #{base}"
         opts.base = base.chomp if base
 

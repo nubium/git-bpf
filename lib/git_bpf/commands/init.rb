@@ -157,7 +157,7 @@ class Init < GitFlow/'init'
     if opts.default_base_name
       target.config(true, "rerere.defaultbasename", opts.default_base_name)
     else
-      target.config(true, '--unset', "rerere.defaultbasename", ignore: true)
+      target.config(true, '--unset', "rerere.defaultbasename", ignore_fail: true)
     end
 
     target.config(true, 'gc.rerereunresolved', '64')
