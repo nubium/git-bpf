@@ -84,9 +84,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
     gt = GitTrace.new
 
     if opts.abortRecreate
-      if gt.empty?
-        terminate "Can't continue -- trace is empty"
-      end
+      checkInProgress(gt)
 
       # This command returns 128 if git in merge process otherwise do nothing
       is_in_merge = git('merge', 'HEAD', redirect_output_to_null: true, ignore_fail: true) == 128
@@ -269,9 +267,7 @@ class RecreateBranch < GitFlow/'recreate-branch'
       git('checkout', '-b', opts.branch, opts.base, '--quiet')
       gt.replace_traces(branches)
     else
-      if gt.empty?
-        terminate "Can't continue -- trace is empty"
-      end
+      checkInProgress(gt)
 
       source = gt.get_source_branch
       opts = gt.get_opts

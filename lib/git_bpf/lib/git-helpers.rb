@@ -138,4 +138,10 @@ module GitHelpersMixin
     end
     return true
   end
+
+  # @param [GitTrace] gt
+  def checkInProgress(gt)
+    fail 'recreate-branch not in progress' unless gt.in_progress?
+  end
+
 end

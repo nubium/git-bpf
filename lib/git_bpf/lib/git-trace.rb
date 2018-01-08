@@ -16,10 +16,26 @@ class GitTrace
     @file.rewind
   end
 
+
   def empty?
     get_merges.count == 0
   end
 
+  def set_complete(is_complete)
+    @file.rewind
+    @file.write('/C=' + (is_complete ? 'true' : 'false')  + "\n" + @file.readlines.join("\n"))
+  end
+
+  def in_progress?
+    self.complete? || File.zero?('.git/.gitbpf-trace')
+  end
+
+  def complete?
+    @file.each {
+        |line|
+      return (line[3 .. -1].strip).gsub("\\n", "\n") if line[0, 3] == '/C='
+    }
+  end
 
   def remove_trace
     unless @file.closed?
