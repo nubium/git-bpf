@@ -26,6 +26,42 @@ describe 'Git-BPF-TRACE' do
     expect { r.run('recreate-branch', '--continue') }.to output("Not in recreate-branch process\n").to_stdout
   end
 
+  it 'should abort if conflict can\'t be resolved' do
+    File.open(@repository_dir + '/initial', 'w') { |file| file.write("foobar") }
+    `git add . && git commit -m "initial"; git push stable master 2>&1`
+
+    `git branch foo && git checkout foo 2>&1`
+    File.open(@repository_dir + '/test.conflict', 'w') { |file| file.write("foobar") }
+    `git add . && git commit -m "FooBar" && git push stable foo 2>&1`
+
+    `git checkout master 2>&1 && git branch foo2 && git checkout foo2 2>&1`
+    File.open(@repository_dir + '/test.conflict', 'w') { |file| file.write("barfoo") }
+    `git add . && git commit -m "BarFoo" && git push stable foo2 2>&1`
+
+    `git checkout master 2>&1 && git branch foo3 && git checkout foo3 2>&1`
+    File.open(@repository_dir + '/test.non-conflict', 'w') { |file| file.write("barfoo") }
+    `git add . && git commit -m "BarFoo" && git push stable foo3 2>&1`
+
+    `git checkout master 2>&1 && git branch integration && git checkout integration 2>&1`
+
+    `git merge --no-ff --no-edit stable/foo`
+    `git merge --no-ff --no-edit stable/foo2`
+    # Fix conflict
+    File.open(@repository_dir + '/test.conflict', 'w') { |file| file.write("barfoo") }
+    `git add . && git commit --no-edit`
+    `git merge --no-ff --no-edit stable/foo3`
+    # Make conflict
+    `git checkout foo2 2>&1`
+    File.open(@repository_dir + '/test.conflict', 'w') { |file| file.write("barfoo2") }
+    `git add . && git commit -m "BarFoo" && git push stable foo2 2>&1`
+
+    r = RecreateBranch.new
+    expect { r.run('recreate-branch', 'integration') }.to output(//).to_stdout # At neni videt bordel
+    expect { r.run('recreate-branch', '--abort')  }.to output(/Aborting/).to_stdout
+    result = `git rev-list --merges --reverse --format=oneline master..integration`
+    expect(result).to match(/Merge remote-tracking branch 'stable\/foo' into integration\n.*Merge remote-tracking branch 'stable\/foo2' into integration\n.*Merge remote-tracking branch 'stable\/foo3' into integration/m)
+  end
+
   it 'should continue if conflict was resolved' do
     File.open(@repository_dir + '/initial', 'w') { |file| file.write("foobar") }
     `git add . && git commit -m "initial"; git push stable master 2>&1`
