@@ -80,12 +80,12 @@ describe 'Git-BPF-TRACE' do
 
     `git checkout master 2>&1 && git branch integration && git checkout integration 2>&1`
 
-    `git merge --no-ff --no-edit foo`
-    `git merge --no-ff --no-edit foo2`
+    `git merge --no-ff --no-edit stable/foo`
+    `git merge --no-ff --no-edit stable/foo2`
     # Fix conflict
     File.open(@repository_dir + '/test.conflict', 'w') { |file| file.write("barfoo") }
     `git add . && git commit --no-edit`
-    `git merge --no-ff --no-edit foo3`
+    `git merge --no-ff --no-edit stable/foo3`
     # Make conflict
     `git checkout foo2 2>&1`
     File.open(@repository_dir + '/test.conflict', 'w') { |file| file.write("barfoo2") }
